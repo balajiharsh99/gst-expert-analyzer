@@ -15,11 +15,11 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(cors());
 
-// Rate limiting
+// Rate limiting - prevent abuse
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 50,
-    message: { error: 'Too many requests, please try again later.' }
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 requests per 15 minutes per IP
+    message: { error: 'Too many requests. Please try again later.' }
 });
 app.use('/api/', limiter);
 
@@ -27,10 +27,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static('public'));
 
+// File upload configuration
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024, files: 10 },
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB max, 5 files
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);
@@ -40,238 +41,97 @@ const upload = multer({
     }
 });
 
+// SERVER-SIDE API KEY - Users never see this
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+if (!GROQ_API_KEY) {
+    console.error('❌ ERROR: GROQ_API_KEY not set in environment variables!');
+    console.error('Add it in Render dashboard → Environment Variables');
+}
 
 // GST Expert System Prompt
 const GST_EXPERT_PROMPT = `You are an Expert Indian GST Consultant, GST Litigation Specialist, Chartered Accountant, and Tax Compliance AI Assistant.
 
-Your job is to analyze uploaded GST-related documents and generate a highly professional GST Notice Summary Report for business users.
-
-The uploaded document may be:
-- GST Notice
-- DRC-01
-- DRC-07
-- ASMT-10
-- REG-17
-- REG-23
-- Audit Notice
-- Show Cause Notice
-- Scrutiny Notice
-- E-way Bill Notice
-- Summons
-- GST Order
-- Recovery Notice
-- Attachment Notice
-- Department Reminder
-- Reply filed earlier
-- Hearing Notice
-- Appeal Order
-- Any GST communication
-
-====================================================
-OUTPUT FORMAT (STRICTLY FOLLOW THIS)
-====================================================
-
-Generate output in the user's selected language.
+Analyze the GST document and generate a professional report with these sections:
 
 # GST NOTICE SUMMARY REPORT
 
-====================================================
-1. BASIC DETAILS
-====================================================
+## 1. BASIC DETAILS
+- GSTIN, Trade Name, Legal Name, Notice Type, Section/Rule, DIN, Reference Number, Dates, Officer Name, Department
 
-Extract and display:
-- GSTIN:
-- Trade Name:
-- Legal Name:
-- Notice Type:
-- Notice Category:
-- Section/Rule:
-- Financial Year:
-- State:
-- Jurisdiction:
-- DIN Number:
-- Reference Number:
-- Date of Issue:
-- Reply Due Date:
-- Hearing Date:
-- Officer Name:
-- Department:
-- Document Pages:
+## 2. EXECUTIVE SUMMARY
+- Simple explanation for business owners
 
-If information unavailable: "Not Found in Document"
+## 3. NOTICE TYPE DETECTION
+- Primary/Secondary category with confidence %
 
-====================================================
-2. EXECUTIVE SUMMARY
-====================================================
+## 4. FINANCIAL ANALYSIS
+- Table: Tax, CGST, SGST, IGST, Cess, Interest, Penalty, Late Fee, Total Demand
 
-Explain in simple business language:
-- Why department issued notice
-- What mismatch/problem identified
-- What taxpayer needs to do
-- What risk exists
+## 5. DEADLINE ANALYSIS
+- Reply deadline, Hearing date, Urgency level (LOW/MEDIUM/HIGH/CRITICAL)
 
-====================================================
-3. NOTICE TYPE DETECTION
-====================================================
+## 6. LEGAL & COMPLIANCE ANALYSIS
+- Applicable sections, Strong/Weak points
 
-Identify exact category:
-- Primary category
-- Secondary category
-- Confidence percentage
+## 7. REQUIRED ACTION PLAN
+- Step-by-step with priority (Immediate/Important/Optional)
 
-Possible: ITC mismatch, GSTR-2A vs 3B mismatch, Fake invoice, Bogus purchase, E-way bill violation, Tax short payment, Excess ITC claim, Return non-filing, GST audit, Refund rejection, Registration cancellation, Interest demand, Penalty proceedings, Search/inspection, Detention/seizure, Supplier mismatch, HSN dispute, Export mismatch, Transitional credit, Others
+## 8. DOCUMENT CHECKLIST
+- Mandatory/Recommended/Optional
 
-====================================================
-4. FINANCIAL ANALYSIS
-====================================================
+## 9. RISK ANALYSIS
+- Risk Score out of 10, Severity level
 
-Create table:
-| Particular | Amount |
-| Tax Amount | |
-| CGST | |
-| SGST | |
-| IGST | |
-| Cess | |
-| Interest | |
-| Penalty | |
-| Late Fee | |
-| Total Demand | |
+## 10. REPLY STRATEGY
+- Technical, Documentation, Legal defense
 
-Also: Total exposure, Immediate liability, Disputed amount
+## 11. DRAFT REPLY OUTLINE
+- Professional structure
 
-====================================================
-5. DEADLINE ANALYSIS
-====================================================
+## 12. FINAL AI RECOMMENDATION
+- Next steps, Seriousness, CA/Advocate needed
 
-Identify: Reply deadline, Hearing date, Appeal limitation, Payment due date
-Calculate: Days remaining, Whether expired
-Urgency: LOW / MEDIUM / HIGH / CRITICAL
+## 13. SMART FEATURES
+- Keywords, Tags, Related forms, Reminders
 
-====================================================
-6. LEGAL & COMPLIANCE ANALYSIS
-====================================================
-
-Analyze: Applicable sections, Relevant rules, Compliance defaults, Department allegations, Legal validity, Natural justice compliance
-Mention: Strong points, Weak points for taxpayer
-
-====================================================
-7. REQUIRED ACTION PLAN
-====================================================
-
-Step-by-step professional action list with priority (Immediate / Important / Optional)
-
-====================================================
-8. DOCUMENT CHECKLIST
-====================================================
-
-Required supporting documents categorized:
-- Mandatory
-- Recommended
-- Optional
-
-====================================================
-9. RISK ANALYSIS
-====================================================
-
-Analyze: ITC blockage, Penalty, Recovery, Bank attachment, Registration cancellation, Litigation risks
-Risk Score: out of 10
-Severity: LOW / MEDIUM / HIGH / CRITICAL
-
-====================================================
-10. REPLY STRATEGY
-====================================================
-
-Professional strategy including: Technical defense, Documentation defense, Reconciliation strategy, Legal defense, Case law suggestion, Payment/Appeal/Hearing recommendations
-
-====================================================
-11. DRAFT REPLY OUTLINE
-====================================================
-
-Professional reply structure:
-- Subject line
-- Intro paragraph
-- Facts submission
-- Legal submission
-- Reconciliation explanation
-- Request for dropping proceedings
-- Annexure reference
-
-====================================================
-12. FINAL AI RECOMMENDATION
-====================================================
-
-Expert recommendation with:
-- Recommended next step
-- Estimated seriousness
-- Whether CA/Advocate support recommended
-
-====================================================
-13. SMART EXTRA FEATURES
-====================================================
-
-- Important keywords
-- Auto-generated case tags
-- Department allegation summary
-- Taxpayer defense summary
-- AI confidence score
-- Related GST forms
-- Suggested folder structure
-- Reminder dates
-- Follow-up actions
-
-====================================================
-IMPORTANT RULES
-====================================================
-
-- Never hallucinate data
-- Never create fake invoice details
-- Never assume missing amounts
-- Mention "Not Available" where data missing
-- Maintain professional GST terminology
-- Use Indian GST law terminology
-- Use simple explanation for business owners
-- Keep report highly structured
-- Highlight critical issues clearly
-
-Now analyze the following GST document text and generate the complete report in the requested language:`;
+RULES: Never hallucinate. Use "Not Available" for missing data. Professional GST terminology.`;
 
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         groqConfigured: !!GROQ_API_KEY,
-        timestamp: new Date().toISOString()
+        message: 'GST Expert Analyzer API'
     });
 });
 
-// Summarize endpoint
-app.post('/api/summarize', upload.array('pdfs', 10), async (req, res) => {
+// Main analyze endpoint - NO API key needed from user
+app.post('/api/analyze', upload.array('pdfs', 5), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'No PDF files uploaded' });
         }
 
-        const language = req.body.language || 'English';
-        const userApiKey = req.body.apiKey;
-        const apiKey = userApiKey || GROQ_API_KEY;
-
-        if (!apiKey) {
-            return res.status(400).json({ 
-                error: 'No API key available. Please provide your Groq API key or ask admin to configure one.' 
+        if (!GROQ_API_KEY) {
+            return res.status(500).json({ 
+                error: 'Server configuration error. Please contact admin.' 
             });
         }
 
+        const language = req.body.language || 'English';
         const results = [];
         const errors = [];
 
         for (const file of req.files) {
             try {
+                // Extract text from PDF
                 const pdfData = await pdfParse(file.buffer);
                 const text = pdfData.text.substring(0, 15000);
 
-                const summary = await callGroqAPI(text, language, apiKey);
+                // Call Groq API with SERVER key
+                const summary = await callGroqAPI(text, language);
 
                 results.push({
                     fileName: file.originalname,
@@ -300,21 +160,21 @@ app.post('/api/summarize', upload.array('pdfs', 10), async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Summarize error:', error);
+        console.error('Analyze error:', error);
         res.status(500).json({ 
-            error: 'Internal server error', 
+            error: 'Analysis failed', 
             message: error.message 
         });
     }
 });
 
-async function callGroqAPI(text, language, apiKey) {
+async function callGroqAPI(text, language) {
     const languageInstruction = {
-        'English': 'Generate the complete report in English language.',
-        'Hindi': 'Generate the complete report in Hindi language (हिन्दी). Use Devanagari script for Hindi text.',
-        'Tamil': 'Generate the complete report in Tamil language (தமிழ்). Use Tamil script.',
-        'Telugu': 'Generate the complete report in Telugu language (తెలుగు). Use Telugu script.',
-        'Marathi': 'Generate the complete report in Marathi language (मराठी). Use Devanagari script.'
+        'English': 'Generate report in English.',
+        'Hindi': 'Generate report in Hindi (हिन्दी) using Devanagari script.',
+        'Tamil': 'Generate report in Tamil (தமிழ்) using Tamil script.',
+        'Telugu': 'Generate report in Telugu (తెలుగు) using Telugu script.',
+        'Marathi': 'Generate report in Marathi (मराठी) using Devanagari script.'
     };
 
     const response = await axios.post(GROQ_API_URL, {
@@ -322,18 +182,18 @@ async function callGroqAPI(text, language, apiKey) {
         messages: [
             { 
                 role: 'system', 
-                content: GST_EXPERT_PROMPT + '\n\n' + languageInstruction[language] 
+                content: GST_EXPERT_PROMPT + '\n\n' + (languageInstruction[language] || languageInstruction['English'])
             },
             { 
                 role: 'user', 
-                content: `GST DOCUMENT TEXT TO ANALYZE:\n\n${text}\n\nGenerate the complete professional GST Notice Summary Report now.` 
+                content: `ANALYZE THIS GST DOCUMENT:\n\n${text}\n\nGenerate complete professional report now.` 
             }
         ],
         temperature: 0.2,
         max_tokens: 4096
     }, {
         headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
             'Content-Type': 'application/json'
         },
         timeout: 60000
@@ -346,11 +206,12 @@ async function callGroqAPI(text, language, apiKey) {
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ 
-        error: 'Something went wrong!',
+        error: 'Server error', 
         message: err.message 
     });
 });
 
+// Serve frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -358,12 +219,12 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`
     ╔══════════════════════════════════════════════════════╗
-    ║      GST EXPERT Summarizer Server Running!           ║
+    ║      GST Expert Analyzer - LIVE                      ║
     ╠══════════════════════════════════════════════════════╣
-    ║  🌐 Website: http://localhost:${PORT}                    ║
-    ║  📁 Professional GST Analysis with 13 Sections       ║
+    ║  🌐 URL: http://localhost:${PORT}                      ║
+    ║  💰 FREE for all users - No API key needed!            ║
     ║                                                      ║
-    ║  API Key Status: ${GROQ_API_KEY ? '✅ Configured' : '❌ Not Set'}              ║
+    ║  API Key: ${GROQ_API_KEY ? '✅ Configured' : '❌ MISSING'}              ║
     ╚══════════════════════════════════════════════════════╝
     `);
 });
