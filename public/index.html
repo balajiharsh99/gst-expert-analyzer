@@ -15,7 +15,6 @@
         .badge { display: inline-block; background: #28a745; color: white; padding: 8px 20px; border-radius: 25px; font-size: 0.9rem; font-weight: 600; margin-top: 10px; }
         .main-card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
         
-        /* UPLOAD SECTION - FIXED */
         .upload-wrapper { margin-bottom: 25px; }
         .upload-section { 
             border: 3px dashed #2a5298; 
@@ -93,6 +92,43 @@
         .feature-box { background: #f0f4ff; padding: 20px; border-radius: 10px; text-align: center; }
         .feature-box .icon { font-size: 2rem; margin-bottom: 10px; }
         
+        /* GSTIN Verification Box Styles */
+        .gstin-verification-box {
+            background: #f0f8ff;
+            border: 2px solid #2a5298;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .gstin-verification-box h4 {
+            color: #1e3c72;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        .gstin-verification-box table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .gstin-verification-box td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        .gstin-verification-box td:first-child {
+            font-weight: bold;
+            background: #e8f0fe;
+            width: 35%;
+        }
+        .status-active { color: #28a745; font-weight: bold; }
+        .status-inactive { color: #dc3545; font-weight: bold; }
+        
+        .gstin-warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
         @media (max-width: 768px) { 
             .controls, .features { grid-template-columns: 1fr; } 
             .header h1 { font-size: 1.8rem; }
@@ -101,7 +137,6 @@
         .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        /* Debug info */
         .debug-info { background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 0.85rem; color: #856404; display: none; }
     </style>
 </head>
@@ -134,7 +169,6 @@
                 </div>
             </div>
 
-            <!-- FIXED UPLOAD SECTION -->
             <div class="upload-wrapper">
                 <div class="upload-section" id="dropZone">
                     <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple>
@@ -202,7 +236,6 @@
         const serverStatus = document.getElementById('serverStatus');
         const debugInfo = document.getElementById('debugInfo');
 
-        // Show debug info
         function showDebug(msg) {
             debugInfo.style.display = 'block';
             debugInfo.textContent = 'Debug: ' + msg;
@@ -224,23 +257,18 @@
         }
         checkServer();
 
-        // FILE UPLOAD EVENTS - FIXED
-        // Click on dropzone triggers file input
         dropZone.addEventListener('click', function(e) {
-            // Only trigger if not clicking the file input itself
             if (e.target !== fileInput) {
                 fileInput.click();
                 showDebug('Dropzone clicked, triggering file input');
             }
         });
 
-        // File input change
         fileInput.addEventListener('change', function(e) {
             showDebug('File input changed, files: ' + e.target.files.length);
             handleFiles(e.target.files);
         });
 
-        // Drag events
         dropZone.addEventListener('dragenter', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -394,15 +422,73 @@
             </div>`;
 
             results.forEach((r, i) => {
+                // Build GSTIN verification HTML
+                let gstinHtml = '';
+                
+                if (r.gstinVerification && r.gstinVerification.valid) {
+                    const v = r.gstinVerification;
+                    const isActive = v.status && v.status.toLowerCase().includes('active');
+                    const statusClass = isActive ? 'status-active' : 'status-inactive';
+                    const statusIcon = isActive ? '✅' : '⚠️';
+                    
+                    gstinHtml = `
+                        <div class="gstin-verification-box">
+                            <h4>🔍 GSTIN Verification Result</h4>
+                            <table>
+                                <tr>
+                                    <td>GSTIN Number</td>
+                                    <td><strong>${v.gstin}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Legal Business Name</td>
+                                    <td>${v.businessName}</td>
+                                </tr>
+                                <tr>
+                                    <td>Trade Name</td>
+                                    <td>${v.tradeName}</td>
+                                </tr>
+                                <tr>
+                                    <td>Registration Status</td>
+                                    <td class="${statusClass}">${v.status} ${statusIcon}</td>
+                                </tr>
+                                <tr>
+                                    <td>State</td>
+                                    <td>${v.state}</td>
+                                </tr>
+                                <tr>
+                                    <td>Registration Date</td>
+                                    <td>${v.registrationDate}</td>
+                                </tr>
+                            </table>
+                            <p style="font-size: 0.8rem; color: #666; margin-top: 10px;">
+                                Source: ${v.source} | Verified on ${new Date().toLocaleDateString('en-IN')}
+                            </p>
+                        </div>
+                    `;
+                } else if (r.extractedGSTINs && r.extractedGSTINs.length > 0) {
+                    gstinHtml = `
+                        <div class="gstin-warning-box">
+                            <p><strong>⚠️ GSTIN Found but Not Verified:</strong> ${r.extractedGSTINs.join(', ')}</p>
+                            <p style="font-size: 0.9rem; margin-top: 5px;">
+                                Verification service temporarily unavailable. 
+                                <a href="https://services.gst.gov.in/services/searchtp" target="_blank" style="color: #2a5298; text-decoration: underline;">
+                                    Verify manually on official GST portal →
+                                </a>
+                            </p>
+                        </div>
+                    `;
+                }
+
                 html += `<div class="gst-report">
                     <div class="gst-report-header">
                         <h2>📋 GST EXPERT REPORT</h2>
                         <div style="color:#666;">${r.fileName} | ${r.pages} pages | ${r.language} | ${new Date().toLocaleString('en-IN')}</div>
                     </div>
+                    ${gstinHtml}
                     <div class="report-content">${formatReport(r.summary)}</div>
                     <div class="download-section">
-                        <button class="btn-download btn-pdf" onclick="downloadSinglePDF(${i})">📄 PDF</button>
-                        <button class="btn-download btn-word" onclick="downloadSingleWord(${i})">📄 Word</button>
+                        <button class="btn-download btn-pdf" onclick="downloadSinglePDF(${i})">📄 Download PDF</button>
+                        <button class="btn-download btn-word" onclick="downloadSingleWord(${i})">📄 Download Word</button>
                     </div>
                 </div>`;
             });
@@ -467,9 +553,20 @@
             doc.setFontSize(10); doc.setTextColor(100, 100, 100);
             doc.text(`${r.fileName} | Generated: ${new Date().toLocaleString('en-IN')}`, 105, 30, {align:'center'});
             
-            doc.setFontSize(9); doc.setTextColor(0, 0, 0);
-            const lines = doc.splitTextToSize(r.summary, 180);
+            // Add GSTIN info if available
             let y = 40;
+            if (r.gstinVerification && r.gstinVerification.valid) {
+                const v = r.gstinVerification;
+                doc.setFontSize(11); doc.setTextColor(30, 60, 114);
+                doc.text('GSTIN VERIFICATION', 15, y); y += 8;
+                doc.setFontSize(9); doc.setTextColor(0, 0, 0);
+                doc.text(`GSTIN: ${v.gstin}`, 15, y); y += 6;
+                doc.text(`Business: ${v.businessName}`, 15, y); y += 6;
+                doc.text(`Status: ${v.status}`, 15, y); y += 6;
+                doc.text(`State: ${v.state}`, 15, y); y += 10;
+            }
+            
+            const lines = doc.splitTextToSize(r.summary, 180);
             lines.forEach(line => {
                 if (y > 280) { doc.addPage(); y = 20; }
                 doc.text(line, 15, y); y += 5;
@@ -491,6 +588,13 @@
                 if (y > 250) { doc.addPage(); y = 20; }
                 doc.setFontSize(14); doc.setTextColor(30, 60, 114);
                 doc.text(`Report ${idx+1}: ${r.fileName}`, 15, y); y += 10;
+                
+                if (r.gstinVerification && r.gstinVerification.valid) {
+                    const v = r.gstinVerification;
+                    doc.setFontSize(9); doc.setTextColor(0, 0, 0);
+                    doc.text(`GSTIN: ${v.gstin} | Status: ${v.status} | State: ${v.state}`, 15, y); y += 6;
+                }
+                
                 doc.setFontSize(9); doc.setTextColor(0, 0, 0);
                 const lines = doc.splitTextToSize(r.summary, 180);
                 lines.forEach(line => {
@@ -510,6 +614,18 @@
                 new Paragraph({ text: 'GST EXPERT REPORT', heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, spacing: {after:400} }),
                 new Paragraph({ text: `${r.fileName} | Generated: ${new Date().toLocaleString('en-IN')}`, alignment: AlignmentType.CENTER, spacing: {after:400} })
             ];
+            
+            // Add GSTIN verification to Word
+            if (r.gstinVerification && r.gstinVerification.valid) {
+                const v = r.gstinVerification;
+                children.push(new Paragraph({ text: 'GSTIN VERIFICATION', heading: HeadingLevel.HEADING_2, spacing: {before:200,after:100} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `GSTIN: ${v.gstin}`, size: 22 })], spacing: {after:80} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `Business Name: ${v.businessName}`, size: 22 })], spacing: {after:80} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `Trade Name: ${v.tradeName}`, size: 22 })], spacing: {after:80} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `Status: ${v.status}`, size: 22 })], spacing: {after:80} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `State: ${v.state}`, size: 22 })], spacing: {after:80} }));
+                children.push(new Paragraph({ children: [new TextRun({ text: `Registration Date: ${v.registrationDate}`, size: 22 })], spacing: {after:200} }));
+            }
             
             r.summary.split('\n').forEach(line => {
                 const t = line.trim();
@@ -534,6 +650,13 @@
             
             currentResults.forEach((r, idx) => {
                 children.push(new Paragraph({ text: `Report ${idx+1}: ${r.fileName}`, heading: HeadingLevel.HEADING_1, spacing: {before:400,after:200} }));
+                
+                if (r.gstinVerification && r.gstinVerification.valid) {
+                    const v = r.gstinVerification;
+                    children.push(new Paragraph({ text: 'GSTIN VERIFICATION', heading: HeadingLevel.HEADING_2, spacing: {before:200,after:100} }));
+                    children.push(new Paragraph({ children: [new TextRun({ text: `GSTIN: ${v.gstin} | Status: ${v.status} | State: ${v.state}`, size: 22 })], spacing: {after:200} }));
+                }
+                
                 r.summary.split('\n').forEach(line => {
                     const t = line.trim();
                     if (!t) return;

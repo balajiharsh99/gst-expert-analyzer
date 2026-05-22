@@ -15,10 +15,10 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(cors());
 
-// Rate limiting - prevent abuse
+// Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // 10 requests per 15 minutes per IP
+    windowMs: 15 * 60 * 1000,
+    max: 50,
     message: { error: 'Too many requests. Please try again later.' }
 });
 app.use('/api/', limiter);
@@ -31,7 +31,7 @@ app.use(express.static('public'));
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB max, 5 files
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);
@@ -41,13 +41,13 @@ const upload = multer({
     }
 });
 
-// SERVER-SIDE API KEY - Users never see this
+// API KEYS
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || 'adfdb5b94dmshb083fde496dab7dp18182djsn6c8a6d90f465';
 
 if (!GROQ_API_KEY) {
     console.error('❌ ERROR: GROQ_API_KEY not set in environment variables!');
-    console.error('Add it in Render dashboard → Environment Variables');
 }
 
 // GST Expert System Prompt
@@ -98,16 +98,131 @@ Analyze the GST document and generate a professional report with these sections:
 
 RULES: Never hallucinate. Use "Not Available" for missing data. Professional GST terminology.`;
 
+// ========== GSTIN VERIFICATION WITH RAPIDAPI ==========
+
+function extractGSTIN(text) {
+    const gstinRegex = /\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}\b/g;
+    const matches = text.match(gstinRegex);
+    return matches ? [...new Set(matches)] : [];
+}
+
+async function verifyGSTIN(gstin) {
+    const cleanGSTIN = gstin.replace(/\s/g, '').toUpperCase();
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    
+    if (!gstinRegex.test(cleanGSTIN)) {
+        return { valid: false, error: 'Invalid GSTIN format' };
+    }
+
+    // Try RapidAPI first (official, reliable)
+    try {
+        const response = await axios.get(`https://gst-verification.p.rapidapi.com/v1/tasks/${cleanGSTIN}`, {
+            timeout: 15000,
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'gst-verification.p.rapidapi.com'
+            }
+        });
+
+        const data = response.data;
+        
+        if (data && data.result) {
+            const result = data.result;
+            return {
+                valid: true,
+                gstin: cleanGSTIN,
+                businessName: result.legalName || result.legal_name || 'Not Available',
+                tradeName: result.tradeName || result.trade_name || 'Not Available',
+                status: result.status || result.gstinStatus || 'Unknown',
+                state: result.state || result.stateName || 'Unknown',
+                registrationDate: result.registrationDate || result.dateOfRegistration || 'Not Available',
+                taxpayerType: result.taxpayerType || result.businessType || 'Not Available',
+                source: 'RapidAPI (Official)'
+            };
+        }
+        
+        return {
+            valid: false,
+            error: 'GSTIN not found in government records',
+            gstin: cleanGSTIN
+        };
+
+    } catch (rapidError) {
+        console.error('RapidAPI GST verification failed:', rapidError.message);
+        
+        // Fallback to KnowYourGST
+        try {
+            console.log('Trying fallback KnowYourGST...');
+            const fallbackResponse = await axios.get(`https://www.knowyourgst.com/gst-number-search/${cleanGSTIN}/`, {
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+
+            const html = fallbackResponse.data;
+            
+            function extractFromHTML(html, label) {
+                const regex = new RegExp(`${label}[\\s\\S]*?<td[^>]*>(.*?)</td>`, 'i');
+                const match = html.match(regex);
+                return match ? match[1].replace(/<[^>]*>/g, '').trim() : null;
+            }
+
+            const businessName = extractFromHTML(html, 'Legal Name of Business');
+            const tradeName = extractFromHTML(html, 'Trade Name');
+            const status = extractFromHTML(html, 'GSTIN Status');
+            const state = extractFromHTML(html, 'State');
+            const registrationDate = extractFromHTML(html, 'Date of Registration');
+
+            return {
+                valid: true,
+                gstin: cleanGSTIN,
+                businessName: businessName || 'Not Available',
+                tradeName: tradeName || 'Not Available',
+                status: status || 'Unknown',
+                state: state || 'Unknown',
+                registrationDate: registrationDate || 'Not Available',
+                taxpayerType: 'Not Available',
+                source: 'KnowYourGST (Fallback)'
+            };
+
+        } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError.message);
+            return { 
+                valid: false, 
+                error: 'All verification services unavailable. Please verify manually on services.gst.gov.in',
+                gstin: cleanGSTIN
+            };
+        }
+    }
+}
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         groqConfigured: !!GROQ_API_KEY,
+        rapidapiConfigured: !!RAPIDAPI_KEY,
         message: 'GST Expert Analyzer API'
     });
 });
 
-// Main analyze endpoint - NO API key needed from user
+// GSTIN Verification Endpoint
+app.post('/api/verify-gstin', async (req, res) => {
+    try {
+        const { gstin } = req.body;
+        if (!gstin) {
+            return res.status(400).json({ error: 'GSTIN is required' });
+        }
+        const result = await verifyGSTIN(gstin);
+        res.json(result);
+    } catch (error) {
+        console.error('Verify GSTIN error:', error);
+        res.status(500).json({ error: 'Verification failed' });
+    }
+});
+
+// Main analyze endpoint
 app.post('/api/analyze', upload.array('pdfs', 5), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
@@ -126,11 +241,16 @@ app.post('/api/analyze', upload.array('pdfs', 5), async (req, res) => {
 
         for (const file of req.files) {
             try {
-                // Extract text from PDF
                 const pdfData = await pdfParse(file.buffer);
                 const text = pdfData.text.substring(0, 15000);
 
-                // Call Groq API with SERVER key
+                // Auto-extract and verify GSTIN
+                const extractedGSTINs = extractGSTIN(text);
+                let gstinVerification = null;
+                if (extractedGSTINs.length > 0) {
+                    gstinVerification = await verifyGSTIN(extractedGSTINs[0]);
+                }
+
                 const summary = await callGroqAPI(text, language);
 
                 results.push({
@@ -138,7 +258,9 @@ app.post('/api/analyze', upload.array('pdfs', 5), async (req, res) => {
                     pages: pdfData.numpages,
                     summary: summary,
                     language: language,
-                    success: true
+                    success: true,
+                    extractedGSTINs: extractedGSTINs,
+                    gstinVerification: gstinVerification
                 });
 
             } catch (fileError) {
@@ -219,12 +341,14 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`
     ╔══════════════════════════════════════════════════════╗
-    ║      GST Expert Analyzer - LIVE                      ║
+    ║      GST Expert Analyzer - LIVE                    ║
     ╠══════════════════════════════════════════════════════╣
-    ║  🌐 URL: http://localhost:${PORT}                      ║
-    ║  💰 FREE for all users - No API key needed!            ║
+    ║  🌐 URL: http://localhost:${PORT}                    ║
+    ║  💰 FREE for all users - No API key needed!          ║
+    ║  🔍 GSTIN Verification (RapidAPI) Enabled            ║
     ║                                                      ║
-    ║  API Key: ${GROQ_API_KEY ? '✅ Configured' : '❌ MISSING'}              ║
+    ║  Groq AI: ${GROQ_API_KEY ? '✅ Ready' : '❌ MISSING'}              ║
+    ║  RapidAPI: ${RAPIDAPI_KEY ? '✅ Ready' : '❌ MISSING'}              ║
     ╚══════════════════════════════════════════════════════╝
     `);
 });
