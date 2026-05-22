@@ -46,10 +46,6 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || 'adfdb5b94dmshb083fde496dab7dp18182djsn6c8a6d90f465';
 
-if (!GROQ_API_KEY) {
-    console.error('❌ ERROR: GROQ_API_KEY not set in environment variables!');
-}
-
 // GST Expert System Prompt
 const GST_EXPERT_PROMPT = `You are an Expert Indian GST Consultant, GST Litigation Specialist, Chartered Accountant, and Tax Compliance AI Assistant.
 
@@ -98,7 +94,7 @@ Analyze the GST document and generate a professional report with these sections:
 
 RULES: Never hallucinate. Use "Not Available" for missing data. Professional GST terminology.`;
 
-// ========== GSTIN VERIFICATION WITH RAPIDAPI ==========
+// ========== GSTIN VERIFICATION ==========
 
 function extractGSTIN(text) {
     const gstinRegex = /\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}\b/g;
@@ -114,7 +110,6 @@ async function verifyGSTIN(gstin) {
         return { valid: false, error: 'Invalid GSTIN format' };
     }
 
-    // Try RapidAPI first (official, reliable)
     try {
         const response = await axios.get(`https://gst-verification.p.rapidapi.com/v1/tasks/${cleanGSTIN}`, {
             timeout: 15000,
@@ -148,16 +143,13 @@ async function verifyGSTIN(gstin) {
         };
 
     } catch (rapidError) {
-        console.error('RapidAPI GST verification failed:', rapidError.message);
+        console.error('RapidAPI failed:', rapidError.message);
         
         // Fallback to KnowYourGST
         try {
-            console.log('Trying fallback KnowYourGST...');
             const fallbackResponse = await axios.get(`https://www.knowyourgst.com/gst-number-search/${cleanGSTIN}/`, {
                 timeout: 10000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
             });
 
             const html = fallbackResponse.data;
@@ -165,32 +157,26 @@ async function verifyGSTIN(gstin) {
             function extractFromHTML(html, label) {
                 const regex = new RegExp(`${label}[\\s\\S]*?<td[^>]*>(.*?)</td>`, 'i');
                 const match = html.match(regex);
-                return match ? match[1].replace(/<[^>]*>/g, '').trim() : null;
+                return match ? match[1].replace(/<<[^>]*>/g, '').trim() : null;
             }
-
-            const businessName = extractFromHTML(html, 'Legal Name of Business');
-            const tradeName = extractFromHTML(html, 'Trade Name');
-            const status = extractFromHTML(html, 'GSTIN Status');
-            const state = extractFromHTML(html, 'State');
-            const registrationDate = extractFromHTML(html, 'Date of Registration');
 
             return {
                 valid: true,
                 gstin: cleanGSTIN,
-                businessName: businessName || 'Not Available',
-                tradeName: tradeName || 'Not Available',
-                status: status || 'Unknown',
-                state: state || 'Unknown',
-                registrationDate: registrationDate || 'Not Available',
+                businessName: extractFromHTML(html, 'Legal Name of Business') || 'Not Available',
+                tradeName: extractFromHTML(html, 'Trade Name') || 'Not Available',
+                status: extractFromHTML(html, 'GSTIN Status') || 'Unknown',
+                state: extractFromHTML(html, 'State') || 'Unknown',
+                registrationDate: extractFromHTML(html, 'Date of Registration') || 'Not Available',
                 taxpayerType: 'Not Available',
                 source: 'KnowYourGST (Fallback)'
             };
 
         } catch (fallbackError) {
-            console.error('Fallback also failed:', fallbackError.message);
+            console.error('Fallback failed:', fallbackError.message);
             return { 
                 valid: false, 
-                error: 'All verification services unavailable. Please verify manually on services.gst.gov.in',
+                error: 'Verification services unavailable',
                 gstin: cleanGSTIN
             };
         }
@@ -231,7 +217,7 @@ app.post('/api/analyze', upload.array('pdfs', 5), async (req, res) => {
 
         if (!GROQ_API_KEY) {
             return res.status(500).json({ 
-                error: 'Server configuration error. Please contact admin.' 
+                error: 'Server configuration error: GROQ_API_KEY not set. Please contact admin.' 
             });
         }
 
@@ -339,16 +325,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`
-    ╔══════════════════════════════════════════════════════╗
-    ║      GST Expert Analyzer - LIVE                    ║
-    ╠══════════════════════════════════════════════════════╣
-    ║  🌐 URL: http://localhost:${PORT}                    ║
-    ║  💰 FREE for all users - No API key needed!          ║
-    ║  🔍 GSTIN Verification (RapidAPI) Enabled            ║
-    ║                                                      ║
-    ║  Groq AI: ${GROQ_API_KEY ? '✅ Ready' : '❌ MISSING'}              ║
-    ║  RapidAPI: ${RAPIDAPI_KEY ? '✅ Ready' : '❌ MISSING'}              ║
-    ╚══════════════════════════════════════════════════════╝
-    `);
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Groq AI: ${GROQ_API_KEY ? 'Ready' : 'MISSING'}`);
+    console.log(`RapidAPI: ${RAPIDAPI_KEY ? 'Ready' : 'MISSING'}`);
 });
