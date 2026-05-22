@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GST Notice Expert Analyzer - AI Powered</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .upload-section {
+            border: 3px dashed #2a5298;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f0f4ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 25px;
+        }
+
+        .upload-section:hover, .upload-section.dragover {
+            background: #e8eeff;
+            border-color: #1e3c72;
+            transform: translateY(-2px);
+        }
+
+        .upload-text {
+            color: #555;
+            font-size: 1.1rem;
+        }
+
+        .upload-text span {
+            color: #2a5298;
+            font-weight: 600;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        select, input[type="text"], input[type="password"] {
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+            background: white;
+            width: 100%;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #2a5298;
+        }
+
+        .api-key-container {
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            border: 2px solid #ffc107;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .api-key-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .api-key-header h3 {
+            color: #333;
+            font-size: 1.2rem;
+        }
+
+        .api-badge {
+            background: #28a745;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .api-badge.inactive {
+            background: #dc3545;
+        }
+
+        .api-input-wrapper {
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .api-input-wrapper input {
+            padding-right: 45px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .toggle-visibility {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .api-help-text {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .api-help-text a {
+            color: #2a5298;
+            font-weight: 600;
+        }
+
+        .api-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .api-status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .api-status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            width: 100%;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(30, 60, 114, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-download {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        .btn-pdf {
+            background: #dc3545;
+        }
+
+        .btn-pdf:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        .btn-word {
+            background: #2b579a;
+        }
+
+        .btn-word:hover {
+            background: #1e3f6f;
+            transform: translateY(-2px);
+        }
+
+        .file-list {
+            margin-bottom: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #2a5298;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: #2a5298;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-size {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .remove-file {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .progress-container {
+            display: none;
+            margin-bottom: 25px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1e3c72, #2a5298);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .results {
+            display: none;
+        }
+
+        /* GST Report Styling */
+        .gst-report {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 25px;
+            border: 2px solid #2a5298;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .gst-report-header {
+            text-align: center;
+            border-bottom: 3px solid #2a5298;
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+        }
+
+        .gst-report-header h2 {
+            color: #1e3c72;
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .gst-report-header .meta {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .report-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #2a5298;
+        }
+
+        .report-section h3 {
+            color: #1e3c72;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .report-section table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .report-section th,
+        .report-section td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        .report-section th {
+            background: #2a5298;
+            color: white;
+            font-weight: 600;
+        }
+
+        .report-section td {
+            background: white;
+        }
+
+        .risk-critical {
+            background: #f8d7da !important;
+            color: #721c24;
+            font-weight: bold;
+        }
+
+        .risk-high {
+            background: #fff3cd !important;
+            color: #856404;
+            font-weight: bold;
+        }
+
+        .risk-medium {
+            background: #d1ecf1 !important;
+            color: #0c5460;
+        }
+
+        .risk-low {
+            background: #d4edda !important;
+            color: #155724;
+        }
+
+        .urgency-critical {
+            color: #dc3545;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .action-immediate {
+            border-left: 4px solid #dc3545 !important;
+        }
+
+        .action-important {
+            border-left: 4px solid #ffc107 !important;
+        }
+
+        .action-optional {
+            border-left: 4px solid #28a745 !important;
+        }
+
+        .download-section {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #28a745;
+        }
+
+        .server-status {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .server-status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .server-status.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .download-section {
+                flex-direction: column;
+            }
+
+            .btn-download {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .gst-report {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 GST Notice Expert Analyzer</h1>
+            <p>AI-Powered Professional GST Litigation Analysis & Report Generation</p>
+        </div>
+
+        <div class="main-card">
+            <!-- Server Status -->
+            <div class="server-status offline" id="serverStatus">
+                🔴 Checking server connection...
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section" id="dropZone">
+                <span style="font-size: 3rem;">📁</span>
+                <div class="upload-text">
+                    Drag & drop your GST notice PDFs here<br>
+                    or <span>browse files</span>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf" multiple>
+            </div>
+
+            <!-- File List -->
+            <div class="file-list" id="fileList"></div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <div class="control-group">
+                    <label for="language">Report Language</label>
+                    <select id="language">
+                        <option value="English">English</option>
+                        <option value="Hindi">Hindi (हिन्दी)</option>
+                        <option value="Tamil">Tamil (தமிழ்)</option>
+                        <option value="Telugu">Telugu (తెలుగు)</option>
+                        <option value="Marathi">Marathi (मराठी)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="summaryType">Analysis Type</label>
+                    <select id="summaryType">
+                        <option value="detailed" selected>Detailed Expert Analysis</option>
+                        <option value="brief">Quick Summary</option>
+                        <option value="legal">Legal Defense Focus</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- API Key Section -->
+            <div class="api-key-container" id="apiKeyContainer">
+                <div class="api-key-header">
+                    <span style="font-size: 1.5rem;">🔑</span>
+                    <h3>Groq API Key</h3>
+                    <span class="api-badge inactive" id="apiStatusBadge">Not Entered</span>
+                </div>
+                
+                <div class="api-input-wrapper">
+                    <input 
+                        type="password" 
+                        id="apiKey" 
+                        placeholder="Paste your Groq API key here (starts with gsk_...)"
+                        autocomplete="off"
+                    >
+                    <button class="toggle-visibility" onclick="toggleApiVisibility()" title="Show/Hide API Key">
+                        👁️
+                    </button>
+                </div>
+                
+                <div class="api-help-text">
+                    <strong>Where to get your key?</strong><br>
+                    1. Go to <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a> (free account)<br>
+                    2. Click <strong>"Create API Key"</strong><br>
+                    3. Copy the key starting with <code>gsk_</code> and paste above
+                </div>
+                
+                <div class="api-status inactive" id="apiStatusMsg">
+                    <span>⚠️</span> No API key — will use server key if available
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Processing...</div>
+            </div>
+
+            <!-- Action Button -->
+            <button class="btn btn-primary" id="summarizeBtn" disabled>
+                <span id="btnText">🔍 Generate Expert GST Report</span>
+            </button>
+
+            <!-- Stats -->
+            <div class="stats" id="statsSection" style="display: none;">
+                <div class="stat-box">
+                    <div class="stat-value" id="statFiles">0</div>
+                    <div class="stat-label">Files Analyzed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statPages">0</div>
+                    <div class="stat-label">Total Pages</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="statTime">0s</div>
+                    <div class="stat-label">Analysis Time</div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="results" id="resultsSection"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        let files = [];
+        let isProcessing = false;
+        let currentResults = [];
+        let serverGroqConfigured = false;
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const summarizeBtn = document.getElementById('summarizeBtn');
+        const btnText = document.getElementById('btnText');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const resultsSection = document.getElementById('resultsSection');
+        const statsSection = document.getElementById('statsSection');
+        const apiKeyInput = document.getElementById('apiKey');
+        const apiStatusBadge = document.getElementById('apiStatusBadge');
+        const apiStatusMsg = document.getElementById('apiStatusMsg');
+        const serverStatus = document.getElementById('serverStatus');
+
+        async function checkServerHealth() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/health`);
+                const data = await response.json();
+                serverGroqConfigured = data.groqConfigured;
+                
+                if (data.status === 'ok') {
+                    serverStatus.className = 'server-status online';
+                    serverStatus.innerHTML = `🟢 Server Online ${data.groqConfigured ? '(AI Ready)' : '(No Server API Key)'}`;
+                    updateApiStatus(apiKeyInput.value.trim());
+                }
+            } catch (error) {
+                serverStatus.className = 'server-status offline';
+                serverStatus.innerHTML = '🔴 Server Offline — Please start the backend server';
+            }
+        }
+
+        checkServerHealth();
+
+        apiKeyInput.addEventListener('input', function() {
+            updateApiStatus(this.value.trim());
+        });
+
+        function updateApiStatus(key) {
+            if (!key) {
+                if (serverGroqConfigured) {
+                    apiStatusBadge.textContent = 'Using Server Key';
+                    apiStatusBadge.className = 'api-badge';
+                    apiStatusMsg.className = 'api-status active';
+                    apiStatusMsg.innerHTML = '<span>✅</span> Server has API key — ready to analyze';
+                } else {
+                    apiStatusBadge.textContent = 'Not Entered';
+                    apiStatusBadge.className = 'api-badge inactive';
+                    apiStatusMsg.className = 'api-status inactive';
+                    apiStatusMsg.innerHTML = '<span>⚠️</span> No API key — analysis will fail';
+                }
+            } else if (key.startsWith('gsk_') && key.length > 20) {
+                apiStatusBadge.textContent = 'Active';
+                apiStatusBadge.className = 'api-badge';
+                apiStatusMsg.className = 'api-status active';
+                apiStatusMsg.innerHTML = '<span>✅</span> Valid API key — expert analysis enabled';
+            } else {
+                apiStatusBadge.textContent = 'Invalid';
+                apiStatusBadge.className = 'api-badge inactive';
+                apiStatusMsg.className = 'api-status inactive';
+                apiStatusMsg.innerHTML = '<span>⚡</span> Key format incorrect — must start with "gsk_"';
+            }
+        }
+
+        window.toggleApiVisibility = function() {
+            apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+        };
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        summarizeBtn.addEventListener('click', processFiles);
+
+        function handleFiles(fileList) {
+            const newFiles = Array.from(fileList).filter(file => file.type === 'application/pdf');
+            if (newFiles.length === 0) {
+                showMessage('Please select PDF files only.', 'error');
+                return;
+            }
+            files = [...files, ...newFiles];
+            renderFileList();
+            updateButtonState();
+        }
+
+        function renderFileList() {
+            if (files.length === 0) {
+                fileList.innerHTML = '';
+                return;
+            }
+            fileList.innerHTML = files.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <div class="file-icon">PDF</div>
+                        <div>
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${formatFileSize(file.size)}</div>
+                        </div>
+                    </div>
+                    <button class="remove-file" onclick="removeFile(${index})">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        window.removeFile = function(index) {
+            files.splice(index, 1);
+            renderFileList();
+            updateButtonState();
+        };
+
+        function updateButtonState() {
+            summarizeBtn.disabled = files.length === 0 || isProcessing;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function processFiles() {
+            if (files.length === 0) return;
+            isProcessing = true;
+            updateButtonState();
+            
+            const language = document.getElementById('language').value;
+            const apiKey = document.getElementById('apiKey').value.trim();
+            
+            progressContainer.style.display = 'block';
+            resultsSection.style.display = 'none';
+            statsSection.style.display = 'none';
+            resultsSection.innerHTML = '';
+
+            const startTime = Date.now();
+            
+            const formData = new FormData();
+            files.forEach(file => formData.append('pdfs', file));
+            formData.append('language', language);
+            formData.append('summaryType', 'detailed');
+            if (apiKey) formData.append('apiKey', apiKey);
+
+            try {
+                updateProgress(20, 'Uploading files to server...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/summarize`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(60, 'AI Expert analyzing documents...');
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+
+                updateProgress(100, 'Report generated!');
+                
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(1);
+                const totalPages = data.results.reduce((sum, r) => sum + (r.pages || 0), 0);
+                
+                document.getElementById('statFiles').textContent = data.totalProcessed;
+                document.getElementById('statPages').textContent = totalPages;
+                document.getElementById('statTime').textContent = duration + 's';
+                statsSection.style.display = 'grid';
+
+                currentResults = data.results;
+                renderResults(data.results, data.errors || []);
+
+            } catch (error) {
+                showMessage('Error: ' + error.message, 'error');
+                console.error(error);
+            }
+
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+                isProcessing = false;
+                updateButtonState();
+                btnText.innerHTML = '🔍 Generate Expert GST Report';
+            }, 1000);
+        }
+
+        function updateProgress(percent, text) {
+            progressFill.style.width = percent + '%';
+            progressText.textContent = text;
+        }
+
+        function renderResults(results, errors) {
+            resultsSection.style.display = 'block';
+            const language = document.getElementById('language').value;
+
+            let html = '';
+
+            // Errors
+            if (errors.length > 0) {
+                html += errors.map(e => `
+                    <div class="error-message">
+                        <strong>❌ Error with ${e.fileName}:</strong> ${e.error}
+                    </div>
+                `).join('');
+            }
+
+            // Download Buttons for Combined Report
+            html += `
+                <div class="download-section">
+                    <button class="btn-download btn-pdf" onclick="downloadAllPDF()">
+                        📕 Download All Reports (PDF)
+                    </button>
+                    <button class="btn-download btn-word" onclick="downloadAllWord()">
+                        📘 Download All Reports (Word)
+                    </button>
+                </div>
+            `;
+
+            // Individual Reports
+            results.forEach((result, index) => {
+                html += `
+                    <div class="gst-report" id="report-${index}">
+                        <div class="gst-report-header">
+                            <h2>📋 GST NOTICE EXPERT REPORT</h2>
+                            <div class="meta">
+                                <strong>Document:</strong> ${result.fileName} | 
+                                <strong>Pages:</strong> ${result.pages} | 
+                                <strong>Language:</strong> ${result.language} | 
+                                <strong>Generated:</strong> ${new Date().toLocaleString('en-IN')}
+                            </div>
+                        </div>
+                        <div class="report-content">
+                            ${formatReportContent(result.summary)}
+                        </div>
+                        <div class="download-section" style="margin-top: 20px;">
+                            <button class="btn-download btn-pdf" onclick="downloadSinglePDF(${index})">
+                                📄 Download This Report (PDF)
+                            </button>
+                            <button class="btn-download btn-word" onclick="downloadSingleWord(${index})">
+                                📄 Download This Report (Word)
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            resultsSection.innerHTML = html;
+        }
+
+        function formatReportContent(summary) {
+            // Convert markdown-style formatting to HTML
+            let html = summary
+                .replace(/#{3,}\s*(.+)/g, '<h3>$1</h3>')
+                .replace(/#{1,2}\s*(.+)/g, '<h2>$1</h2>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/\|(.+)\|/g, function(match) {
+                    // Simple table conversion
+                    const rows = match.trim().split('\n');
+                    if (rows.length < 2) return match;
+                    
+                    let tableHtml = '<table>';
+                    rows.forEach((row, i) => {
+                        const cells = row.split('|').filter(c => c.trim());
+                        const tag = i === 0 ? 'th' : 'td';
+                        tableHtml += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+                    });
+                    tableHtml += '</table>';
+                    return tableHtml;
+                })
+                .replace(/-\s+(.+)/g, '<li>$1</li>')
+                .replace(/(\d+)\.\s+(.+)/g, '<li><strong>$1.</strong> $2</li>')
+                .replace(/\n{2,}/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+
+            // Wrap in sections based on numbered headers
+            html = html.replace(/<h2>([\d\.]+\s+.+?)<\/h2>/g, '</div><div class="report-section"><h3>$1</h3>');
+            
+            return '<div class="report-section">' + html + '</div>';
+        }
+
+        // PDF Download Functions
+        window.downloadSinglePDF = function(index) {
+            const { jsPDF } = window.jspdf;
+            const result = currentResults[index];
+            const doc = new jsPDF();
+            
+            doc.setFont('helvetica');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            const maxWidth = pageWidth - 2 * margin;
+            
+            let y = 20;
+            const lineHeight = 6;
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Title
+            doc.setFontSize(18);
+            doc.setTextColor(30, 60, 114);
+            doc.text('GST NOTICE EXPERT REPORT', pageWidth / 2, y, { align: 'center' });
+            y += 12;
+            
+            // Meta
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Document: ${result.fileName} | Pages: ${result.pages} | Generated: ${new Date().toLocaleString('en-IN')}`, pageWidth / 2, y, { align: 'center' });
+            y += 15;
+
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(9);
+
+            const lines = doc.splitTextToSize(result.summary, maxWidth);
+            
+            for (let i = 0; i < lines.length; i++) {
+                if (y + lineHeight > pageHeight - 20) {
+                    doc.addPage();
+                    y = 20;
+                }
+                doc.text(lines[i], margin, y);
+                y += lineHeight;
+            }
+
+            doc.save(`GST_Expert_Report_${result.fileName.replace('.pdf', '')}.pdf`);
+        };
+
+        window.downloadAllPDF = function() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFont('helvetica');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            const maxWidth = pageWidth - 2 * margin;
+            
+            let y = 20;
+            const lineHeight = 6;
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Cover Page
+            doc.setFontSize(22);
+            doc.setTextColor(30, 60, 114);
+            doc.text('COMBINED GST EXPERT REPORTS', pageWidth / 2, y, { align: 'center' });
+            y += 15;
+            
+            doc.setFontSize(12);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Total Documents: ${currentResults.length} | Generated: ${new Date().toLocaleString('en-IN')}`, pageWidth / 2, y, { align: 'center' });
+            y += 25;
+
+            currentResults.forEach((result, idx) => {
+                if (y > pageHeight - 40) {
+                    doc.addPage();
+                    y = 20;
+                }
+
+                doc.setFontSize(14);
+                doc.setTextColor(30, 60, 114);
+                doc.text(`Report ${idx + 1}: ${result.fileName}`, margin, y);
+                y += 10;
+
+                doc.setFontSize(9);
+                doc.setTextColor(0, 0, 0);
+                
+                const lines = doc.splitTextToSize(result.summary, maxWidth);
+                
+                for (let i = 0; i < lines.length; i++) {
+                    if (y + lineHeight > pageHeight - 20) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                    doc.text(lines[i], margin, y);
+                    y += lineHeight;
+                }
+                
+                y += 15;
+            });
+
+            doc.save(`GST_Combined_Expert_Reports_${new Date().toISOString().split('T')[0]}.pdf`);
+        };
+
+        // Word Download Functions
+        window.downloadSingleWord = function(index) {
+            const result = currentResults[index];
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+            
+            const children = [
+                new Paragraph({
+                    text: 'GST NOTICE EXPERT REPORT',
+                    heading: HeadingLevel.TITLE,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 400 }
+                }),
+                new Paragraph({
+                    text: `Document: ${result.fileName} | Pages: ${result.pages} | Generated: ${new Date().toLocaleString('en-IN')}`,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 400 }
+                })
+            ];
+
+            const lines = result.summary.split('\n');
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    children.push(new Paragraph({ text: '' }));
+                    return;
+                }
+                
+                if (trimmed.match(/^#{1,2}\s/)) {
+                    children.push(new Paragraph({
+                        text: trimmed.replace(/^#+\s/, ''),
+                        heading: HeadingLevel.HEADING_2,
+                        spacing: { before: 200, after: 100 }
+                    }));
+                } else if (trimmed.match(/^#{3,}\s/)) {
+                    children.push(new Paragraph({
+                        text: trimmed.replace(/^#+\s/, ''),
+                        heading: HeadingLevel.HEADING_3,
+                        spacing: { before: 150, after: 80 }
+                    }));
+                } else {
+                    children.push(new Paragraph({
+                        children: [new TextRun({ text: trimmed, size: 22 })],
+                        spacing: { after: 120 }
+                    }));
+                }
+            });
+
+            const doc = new Document({
+                sections: [{
+                    properties: {
+                        page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } }
+                    },
+                    children: children
+                }]
+            });
+
+            Packer.toBlob(doc).then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `GST_Expert_Report_${result.fileName.replace('.pdf', '')}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        };
+
+        window.downloadAllWord = function() {
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+            
+            const children = [
+                new Paragraph({
+                    text: 'COMBINED GST EXPERT REPORTS',
+                    heading: HeadingLevel.TITLE,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 400 }
+                }),
+                new Paragraph({
+                    text: `Total Documents: ${currentResults.length} | Generated: ${new Date().toLocaleString('en-IN')}`,
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 600 }
+                })
+            ];
+
+            currentResults.forEach((result, idx) => {
+                children.push(new Paragraph({
+                    text: `Report ${idx + 1}: ${result.fileName}`,
+                    heading: HeadingLevel.HEADING_1,
+                    spacing: { before: 400, after: 200 }
+                }));
+
+                const lines = result.summary.split('\n');
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) {
+                        children.push(new Paragraph({ text: '' }));
+                        return;
+                    }
+                    
+                    if (trimmed.match(/^#{1,2}\s/)) {
+                        children.push(new Paragraph({
+                            text: trimmed.replace(/^#+\s/, ''),
+                            heading: HeadingLevel.HEADING_2,
+                            spacing: { before: 200, after: 100 }
+                        }));
+                    } else if (trimmed.match(/^#{3,}\s/)) {
+                        children.push(new Paragraph({
+                            text: trimmed.replace(/^#+\s/, ''),
+                            heading: HeadingLevel.HEADING_3,
+                            spacing: { before: 150, after: 80 }
+                        }));
+                    } else {
+                        children.push(new Paragraph({
+                            children: [new TextRun({ text: trimmed, size: 22 })],
+                            spacing: { after: 120 }
+                        }));
+                    }
+                });
+            });
+
+            const doc = new Document({
+                sections: [{
+                    properties: {
+                        page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } }
+                    },
+                    children: children
+                }]
+            });
+
+            Packer.toBlob(doc).then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `GST_Combined_Expert_Reports_${new Date().toISOString().split('T')[0]}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        };
+
+        function showMessage(message, type) {
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'error-message' : 'success-message';
+            div.textContent = message;
+            document.querySelector('.main-card').insertBefore(div, document.querySelector('.upload-section'));
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        const originalProcessFiles = processFiles;
+        processFiles = async function() {
+            btnText.innerHTML = '<span class="loading-spinner"></span> AI Expert Analyzing...';
+            await originalProcessFiles();
+        };
+    </script>
+</body>
+</html>
