@@ -41,12 +41,14 @@ const upload = multer({
     }
 });
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_API_KEY    = process.env.GROQ_API_KEY;
+const GROQ_API_URL    = 'https://api.groq.com/openai/v1/chat/completions';
+const RAPIDAPI_KEY    = process.env.RAPIDAPI_KEY;
+const GSTIN_HOST      = 'gst-return-status.p.rapidapi.com';
+const GSTIN_BASE_URL  = `https://${GSTIN_HOST}/free/gstin`;
 
-if (!GROQ_API_KEY) {
-    console.error('❌ ERROR: GROQ_API_KEY not set in environment variables!');
-}
+if (!GROQ_API_KEY)  console.error('❌ ERROR: GROQ_API_KEY not set!');
+if (!RAPIDAPI_KEY)  console.error('❌ ERROR: RAPIDAPI_KEY not set!');
 
 // ─── GST EXPERT SYSTEM PROMPT ───────────────────────────────────────────────
 const GST_EXPERT_PROMPT = `You are a Senior Expert Indian GST Consultant, GST Litigation Specialist, and Chartered Accountant with 20+ years of experience.
@@ -184,12 +186,112 @@ async function callGroqAPI(text, language, retries = 2) {
     }
 }
 
+// ─── GSTIN HELPERS ───────────────────────────────────────────────────────────
+
+function isValidGSTIN(gstin) {
+    return /^[0-3][0-9][A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin.trim().toUpperCase());
+}
+
+const STATE_CODES = {
+    '01':'Jammu & Kashmir','02':'Himachal Pradesh','03':'Punjab','04':'Chandigarh',
+    '05':'Uttarakhand','06':'Haryana','07':'Delhi','08':'Rajasthan','09':'Uttar Pradesh',
+    '10':'Bihar','11':'Sikkim','12':'Arunachal Pradesh','13':'Nagaland','14':'Manipur',
+    '15':'Mizoram','16':'Tripura','17':'Meghalaya','18':'Assam','19':'West Bengal',
+    '20':'Jharkhand','21':'Odisha','22':'Chhattisgarh','23':'Madhya Pradesh',
+    '24':'Gujarat','26':'Dadra & Nagar Haveli','27':'Maharashtra','28':'Andhra Pradesh',
+    '29':'Karnataka','30':'Goa','31':'Lakshadweep','32':'Kerala','33':'Tamil Nadu',
+    '34':'Puducherry','35':'Andaman & Nicobar','36':'Telangana','37':'Andhra Pradesh (New)',
+    '38':'Ladakh','97':'Other Territory','99':'Centre Jurisdiction'
+};
+
+// Rate limiter for GSTIN — protects RapidAPI free quota (1000/day)
+const gstinLimiter = rateLimit({
+    windowMs: 60 * 1000, max: 15,
+    message: { error: 'Too many GSTIN searches. Please wait a moment.' },
+    standardHeaders: true, legacyHeaders: false,
+});
+
 // ─── ROUTES ─────────────────────────────────────────────────────────────────
+
+// GSTIN Search
+app.get('/api/gstin/:gstin', gstinLimiter, async (req, res) => {
+    try {
+        const gstin = req.params.gstin.trim().toUpperCase();
+
+        if (!isValidGSTIN(gstin)) {
+            return res.status(400).json({
+                error: 'Invalid GSTIN format. Must be 15 characters (e.g. 33AABCC1234D1ZX).'
+            });
+        }
+
+        if (!RAPIDAPI_KEY) {
+            return res.status(500).json({ error: 'GSTIN search not configured. Contact admin.' });
+        }
+
+        const response = await axios.get(
+            `https://gst-return-status.p.rapidapi.com/free/gstin/${gstin}`,
+            {
+                headers: {
+                    'x-rapidapi-key':  RAPIDAPI_KEY,
+                    'x-rapidapi-host': 'gst-return-status.p.rapidapi.com',
+                    'content-type':    'application/json'
+                },
+                timeout: 15000
+            }
+        );
+
+        const d = response.data?.data;
+        if (!d) return res.status(404).json({ error: 'GSTIN not found.' });
+
+        const stateCode   = gstin.substring(0, 2);
+        const latestGSTR1  = d.returns?.find(r => r.rtntype === 'GSTR1');
+        const latestGSTR3B = d.returns?.find(r => r.rtntype === 'GSTR3B');
+
+        res.json({
+            success: true,
+            data: {
+                gstin:              d.gstin || gstin,
+                legalName:          d.lgnm || 'N/A',
+                tradeName:          d.tradeName || d.lgnm || 'N/A',
+                status:             d.sts || 'N/A',
+                registrationType:   d.dty || 'N/A',
+                entityType:         d.ctb || 'N/A',
+                pan:                d.pan || 'N/A',
+                registrationDate:   d.rgdt || 'N/A',
+                cancellationDate:   d.cxdt || null,
+                address:            d.adr || 'N/A',
+                pincode:            d.pincode || 'N/A',
+                stateCode,
+                stateName:          STATE_CODES[stateCode] || 'Unknown',
+                centralJurisdiction: d.ctj || 'N/A',
+                stateJurisdiction:   d.stj || 'N/A',
+                complianceCategory:  d.compCategory || 'N/A',
+                aggregateTurnover:   d.aggreTurnOver || 'N/A',
+                turnoverFY:          d.aggreTurnOverFY || 'N/A',
+                hsnCodes:            d.hsn || [],
+                natureOfBusiness:    d.nba || [],
+                mandatoryEInvoice:   d.mandatedeInvoice || 'N/A',
+                filingFrequency:     d.fillingFreq || {},
+                returns:             (d.returns || []).slice(0, 24),
+                latestGSTR1:         latestGSTR1  ? `${latestGSTR1.taxp} ${latestGSTR1.fy} (filed ${latestGSTR1.dof})`  : 'N/A',
+                latestGSTR3B:        latestGSTR3B ? `${latestGSTR3B.taxp} ${latestGSTR3B.fy} (filed ${latestGSTR3B.dof})` : 'N/A',
+                dataSyncedOn:        d.meta?.syncMasterDate || 'N/A'
+            }
+        });
+
+    } catch (err) {
+        console.error('GSTIN lookup error:', err.message);
+        if (err.response?.status === 404) return res.status(404).json({ error: 'GSTIN not found in GST portal database.' });
+        if (err.response?.status === 429) return res.status(429).json({ error: 'Search quota exceeded. Try again later.' });
+        res.status(500).json({ error: 'GSTIN lookup failed. ' + (err.message || '') });
+    }
+});
 
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        groqConfigured: !!GROQ_API_KEY,
+        groqConfigured:    !!GROQ_API_KEY,
+        gstinConfigured:   !!RAPIDAPI_KEY,
         timestamp: new Date().toISOString(),
         message: 'GST Expert Analyzer — Online'
     });
