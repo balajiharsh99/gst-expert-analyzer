@@ -1,0 +1,5 @@
+# Get your FREE API key from: https://console.groq.com
+GROQ_API_KEY=gsk_your_actual_groq_api_key_here
+
+# Port (Render sets this automatically — do not change)
+PORT=3000
